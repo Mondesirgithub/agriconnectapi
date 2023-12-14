@@ -28,7 +28,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             user = Utilisateur.objects.filter(username=attrs['username']).first()
 
             if user and user.check_password(attrs['password']):
-                serializer = UtilisateurSerializer(user).data
+                serializer = UtilisateurSerializerWithToken(user).data
                 for k, v in serializer.items():
                     data[k] = v
                 return data
@@ -66,14 +66,15 @@ def registerUser(request):
     data = request.data
 
     user = Utilisateur.objects.create(
-        nom = data['nom'],
-        prenom = data['prenom'],
+        last_name = data['nom'],
+        first_name = data['prenom'],
         adresse = data['adresse'],
         telephone = data['telephone'],
+        culture = data['culture'],
         username = data['username'],
-        password = data['password']
+        password = make_password(data['password'])
     )
-    serializer = UtilisateurSerializer(user, many=False)
+    serializer = UtilisateurSerializerWithToken(user, many=False)
     return Response(serializer.data)
 
 
