@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Confirmation de commande</title>
+</head>
+<body>
+    <h2>Bonjour {{ user.username }},</h2>
+    <p>Voici les détails de votre commande de Mr/Mmr {{buyer.first_name}} {{buyer.last_name}} :</p>
+
+    {% for produit in owner_products %}
+        <div>
+            <h3>{{ produit.name }}</h3>
+            <p>Description: {{ produit.description }}</p>
+            <p>Prix: {{ produit.quantity }} EUR</p>
+            <!-- Ajoutez d'autres informations sur le produit ici -->
+        </div>
+        <hr>
+    {% endfor %}
+
+    <p>Cordialement,</p>
+    <p>AgriConnect</p>
+</body>
+</html>

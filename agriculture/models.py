@@ -128,3 +128,6 @@ class PanierLocation(models.Model):
         self.articles.clear()
 
         super().delete(*args, **kwargs)
+
+
+

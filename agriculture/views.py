@@ -7,10 +7,17 @@ import requests
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 # Create your views here.
 from .utils.functions import genererate_string, process_phone_number_cg_am
+import json
+from django.utils.html import strip_tags
+from django.conf import settings
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 
 @api_view(['GET'])
 def allEquipements(request):
-    equipements = Equipment.objects.all()
+    user = request.user
+    # Filtrer les équipements liés à l'utilisateur connecté
+    equipements = Equipment.objects.filter(owner=user.id)
     serializer = EquipementSerializer(equipements, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)  
 
@@ -122,20 +129,52 @@ def allCategories(request):
 @api_view(['POST'])
 def checkout(request):
     data = request.data
+    buyer = request.user
+    produits = json.loads(data['items'])
+    # Extrait les noms d'utilisateur des propriétaires
+    usernames_proprietaires = [produit['owner']['username'] for produit in produits]
+
+    # Affiche les noms d'utilisateur et l'ensemble des produits pour chaque propriétaire
+    # for username, produit in zip(usernames_proprietaires, produits):
+    #     print("--------> ", username)
+    #     print("Produits associés:")
+    #     for key, value in produit.items():
+    #         print(f"{key}: {value}")
+    #     print("\n")
     try:
+        user = Utilisateur.objects.get(username=data['email'])
         api_url = "https://www.tstcgb.com/postswitch/epay000.php/"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = {
             "merchantID": "MOKO-PAY-CG",
             "merchantPWD": "mKP@081123100702@",
             "transID": genererate_string(),
-            "amount": 50,
+            "amount": data['bill_amount'],
             "msisdn" : process_phone_number_cg_am(data['phone_number']),
             "callbackUrl":"http://apitest.mokopay.net/callback/cg_am/",
             "action": "getID"
         } 
         response = requests.post(api_url, data=data, headers=headers)
-        print("===> ", response.status_code)
+        if str(response.status_code) == "200":
+            subject = "Commande des matériaux agricoles"
+            template = 'agriculture/commande.html'
+
+            # Envoi d'e-mails aux propriétaires des produits
+            for username in usernames_proprietaires:
+                owner = Utilisateur.objects.get(username=username)
+
+                # Construire le corps du message avec les produits associés
+                owner_products = [produit for produit in produits if produit['owner']['username'] == username]
+                owner_context = {'user': owner, 'owner_products': owner_products, 'buyer' : buyer}
+                owner_html_message = render_to_string(template, owner_context)
+                owner_plain_message = strip_tags(owner_html_message)
+
+                # Envoyer l'e-mail au propriétaire
+                owner_recipient_list = [owner.username]
+                send_mail(subject, owner_plain_message, settings.EMAIL_HOST_USER, owner_recipient_list, html_message=owner_html_message)
+
+            return Response({'success': 'Nous vous avons envoyé un message, vérifiez votre boîte mail 😊!'}, status=status.HTTP_200_OK)
+                
         return Response({"message":f"Veuillez continuer le processus sur votre téléphone portable"})
     except Exception as e:
         return Response({"error":f"Erreur survenue lors de la communication avec Airtel {e}"})
