@@ -25,8 +25,11 @@ urlpatterns = [
 
 
     path('equipements/', views.allEquipements, name='equipements'),
+    path('equipementsUser/', views.allEquipementsUser, name='equipements'),
     path('rent_equipement/<str:pk>', views.rent_equipement, name='rent_equipement'),
     path('unrent_equipement/<str:pk>', views.unrent_equipement, name='unrent_equipement'),
+    path('callback/', views.callback, name='callback'),
+    
 
     path('sent_equipement/<str:pk>', views.sent_equipement, name='sent_equipement'),
     path('unsent_equipement/<str:pk>', views.unsent_equipement, name='unsent_equipement'),

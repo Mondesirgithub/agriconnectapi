@@ -1,8 +1,10 @@
+from django.shortcuts import redirect
 from .models import *
 from .serializers import *
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.views.decorators.csrf import csrf_exempt
 import requests
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 # Create your views here.
@@ -12,12 +14,20 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from .utils.functions import cg_am_transaction_message
 
 @api_view(['GET'])
-def allEquipements(request):
+def allEquipementsUser(request):
     user = request.user
     # Filtrer les équipements liés à l'utilisateur connecté
     equipements = Equipment.objects.filter(owner=user.id)
+    serializer = EquipementSerializer(equipements, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)  
+
+
+@api_view(['GET'])
+def allEquipements(request):
+    equipements = Equipment.objects.all()
     serializer = EquipementSerializer(equipements, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)  
 
@@ -129,10 +139,18 @@ def allCategories(request):
 @api_view(['POST'])
 def checkout(request):
     data = request.data
+    print(data)
     buyer = request.user
     produits = json.loads(data['items'])
     # Extrait les noms d'utilisateur des propriétaires
-    usernames_proprietaires = [produit['owner']['username'] for produit in produits]
+    for product in produits:
+        p = Equipment.objects.get(id=product['id'])
+        if data['openLocation'] == 'true':
+            p.rental_stock = int(product['rental_stock']) - int(product['quantity'])
+            p.save()
+        else:
+            p.stock = int(product['stock']) - int(product['quantity'])
+            p.save()
 
     # Affiche les noms d'utilisateur et l'ensemble des produits pour chaque propriétaire
     # for username, produit in zip(usernames_proprietaires, produits):
@@ -142,7 +160,6 @@ def checkout(request):
     #         print(f"{key}: {value}")
     #     print("\n")
     try:
-        user = Utilisateur.objects.get(username=data['email'])
         api_url = "https://www.tstcgb.com/postswitch/epay000.php/"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = {
@@ -151,33 +168,36 @@ def checkout(request):
             "transID": genererate_string(),
             "amount": data['bill_amount'],
             "msisdn" : process_phone_number_cg_am(data['phone_number']),
-            "callbackUrl":"http://apitest.mokopay.net/callback/cg_am/",
+            "callbackUrl":"agriconnectapi.pythonanywhere.com/agriculture/callback/",
             "action": "getID"
         } 
         response = requests.post(api_url, data=data, headers=headers)
         if str(response.status_code) == "200":
-            subject = "Commande des matériaux agricoles"
-            template = 'agriculture/commande.html'
-
+            pass
             # Envoi d'e-mails aux propriétaires des produits
-            for username in usernames_proprietaires:
-                owner = Utilisateur.objects.get(username=username)
+            # for username in usernames_proprietaires:
+            #     # subject = "Commande des matériaux agricoles"
+            #     # template = 'agriculture/commande.html'
+            #     # owner = Utilisateur.objects.get(username=username)
+            #     # Construire le corps du message avec les produits associés
+            #     owner_products = [produit for produit in produits if produit['owner']['username'] == username]
+            #     for product in owner_products:
+                    
+                # context = {'user': owner, 'owner_products': owner_products, 'buyer' : buyer, 'bill_amount':data['bill_amount']}
+                # html_message = render_to_string(template, context)
+                # plain_message = strip_tags(html_message)
+                # # Envoyer l'e-mail au propriétaire
+                # recipient_list = [owner.username]
+                # send_mail(subject, plain_message, settings.EMAIL_HOST_USER, recipient_list, html_message=html_message)
 
-                # Construire le corps du message avec les produits associés
-                owner_products = [produit for produit in produits if produit['owner']['username'] == username]
-                owner_context = {'user': owner, 'owner_products': owner_products, 'buyer' : buyer}
-                owner_html_message = render_to_string(template, owner_context)
-                owner_plain_message = strip_tags(owner_html_message)
-
-                # Envoyer l'e-mail au propriétaire
-                owner_recipient_list = [owner.username]
-                send_mail(subject, owner_plain_message, settings.EMAIL_HOST_USER, owner_recipient_list, html_message=owner_html_message)
-
+            # return redirect('callback')
             return Response({'success': 'Nous vous avons envoyé un message, vérifiez votre boîte mail 😊!'}, status=status.HTTP_200_OK)
                 
         return Response({"message":f"Veuillez continuer le processus sur votre téléphone portable"})
     except Exception as e:
         return Response({"error":f"Erreur survenue lors de la communication avec Airtel {e}"})
+
+
 
 
 @api_view(['GET'])
@@ -343,3 +363,17 @@ def vider_panier_location(request):
     return Response({'message' : 'Votre panier de location a bien été vidé'}, status=status.HTTP_200_OK)
 
 
+@csrf_exempt
+def callback(request):
+    # ... Votre logique de traitement ...
+    if request.method == "POST":
+        data = json.loads(request.body.decode('utf-8'))
+        status = data.get("status") 
+        
+        if str(status) == "200":
+            pass
+        
+        informations = cg_am_transaction_message(status)
+        message = informations['message'] if str(status) == '200' else informations['error']['message']
+    # Une fois que le traitement est terminé, redirigez vers localhost:3000
+    return redirect(f'http://localhost:3000/validate_payment?message={message}')
