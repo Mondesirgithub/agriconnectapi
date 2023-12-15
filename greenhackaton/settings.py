@@ -153,7 +153,7 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with'
 ]
 
-CORS_ALLOWED_ORIGINS = ['http://localhost:3000','http://127.0.0.1:3000', 'https://agriconnect-p9y4.vercel.app']
+CORS_ALLOWED_ORIGINS = ['http://localhost:3000','http://127.0.0.1:3000', 'https://agriconnect-juz1.vercel.app']
 
 
 # Database
